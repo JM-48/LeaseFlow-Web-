@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ROLES } from "../config/apiConfig";
 import { getErrorMessage } from "../core/errors";
-import { solicitudService, registroService } from "../api";
+import { solicitudService, registroService, propiedadService } from "../api";
 import type { SolicitudArriendoDTO, CrearRegistroRequest } from "../types";
 
 // ─────────────────────────────────────────────
@@ -90,21 +90,31 @@ const SolicitudesRecibidas: React.FC<SolicitudesRecibidasProps> = ({ scope = "MI
     setError(null);
 
     try {
-      // Traemos TODAS las solicitudes con detalles (el backend filtra por rol vía X-Rol-Id)
-      const data = await solicitudService.listar(true);
-      const all = Array.isArray(data) ? data : [];
+      if (esGestorGlobal) {
+        // ADMIN en modo gestor global: todas las solicitudes del sistema
+        const data = await solicitudService.listar(true);
+        setSolicitudes(Array.isArray(data) ? data : []);
+        return;
+      }
 
-      // Gestor global (solo ADMIN con scope="ALL"): no se filtra, se ve todo.
-      // Cualquier otro caso (propietario, o admin viendo "sus" solicitudes):
-      // se filtra siempre por propietarioId === userId.
-      const filtradas = esGestorGlobal
-        ? all
-        : all.filter((s) => {
-            const prop = s.propiedad as (typeof s.propiedad & { propietarioId?: number }) | undefined;
-            return prop?.propietarioId === userId;
-          });
+      // PROPIETARIO (o ADMIN viendo sus propias propiedades):
+      // el backend no filtra /api/solicitudes por propietario (solo por
+      // arrendatario), así que primero traemos sus propiedades y luego
+      // las solicitudes recibidas en cada una.
+      const propiedades = await propiedadService.listarPorPropietario(userId, false);
 
-      setSolicitudes(filtradas);
+      if (!propiedades || propiedades.length === 0) {
+        setSolicitudes([]);
+        return;
+      }
+
+      const resultados = await Promise.all(
+        propiedades.map((p) =>
+          solicitudService.obtenerPorPropiedad(p.id, true).catch(() => [])
+        )
+      );
+
+      setSolicitudes(resultados.flat());
     } catch (err: unknown) {
       setError(getErrorMessage(err, "No se pudieron cargar las solicitudes."));
     } finally {
