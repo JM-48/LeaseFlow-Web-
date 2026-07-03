@@ -1,10 +1,11 @@
 # Leaseflow (Frontend)
 
-Aplicación web (SPA) para arriendo inmobiliario directo y sin comisiones, construida con React + TypeScript + Vite. Este repositorio contiene únicamente el frontend y se integra con una arquitectura de microservicios.
+Aplicación web SPA para arriendo inmobiliario directo y sin comisiones, construida sobre React, TypeScript y Vite. Este repositorio contiene el frontend de Leaseflow y consume una arquitectura distribuida basada en microservicios HTTP.
 
 ## Tabla de contenidos
 
 - [Resumen](#resumen)
+- [Versión actual](#versión-actual)
 - [Tecnologías](#tecnologías)
 - [Arquitectura](#arquitectura)
 - [Modelo de datos (DTOs)](#modelo-de-datos-dtos)
@@ -24,21 +25,59 @@ Leaseflow permite:
 - Gestión de propiedades por propietario (y vista global para admin).
 - Gestión de documentos por el usuario (carga) y revisión por admin (aprobación/rechazo).
 - Formulario de contacto integrado con un servicio dedicado.
-- Sección de valoraciones (UI local, sin persistencia).
+- Sección de valoraciones integrada con `reviewService`.
+- Revisión de postulantes por parte del arrendador con información ampliada de postulante, propiedad y documentos aceptados.
+- Gestión administrativa de usuarios, contacto, propiedades, documentos y dashboard.
+
+## Versión actual
+
+Estado actual del paquete según [package.json](file:///c:/Users/jeanf/OneDrive/Documentos/GitHub/LeaseFlow-Web-/package.json):
+
+- Nombre del paquete: `leaseflow`
+- Versión actual: `0.0.0`
+- Tipo de módulo: `ESM` (`"type": "module"`)
+- Estado del frontend: activo y compilando con `npm run build`
 
 ## Tecnologías
 
-- Runtime/build: Vite
-- UI: React, React Router DOM, Bootstrap 5
-- Lenguaje: TypeScript
-- Calidad: ESLint
-- Pruebas: Vitest + Testing Library (entorno jsdom)
+### Stack principal
+
+| Área | Tecnología | Versión actual |
+|---|---|---|
+| UI | React | `19.1.1` |
+| Render DOM | React DOM | `19.1.1` |
+| Routing SPA | React Router DOM | `7.9.4` |
+| Bundler / Dev Server | Vite | `7.1.7` |
+| Plugin Vite React | `@vitejs/plugin-react` | `5.0.4` |
+| Lenguaje | TypeScript | `5.9.3` |
+| Estilos UI | Bootstrap | `5.3.8` |
+
+### Calidad y pruebas
+
+| Área | Tecnología | Versión actual |
+|---|---|---|
+| Lint base | ESLint | `9.36.0` |
+| Reglas TS | `typescript-eslint` | `8.45.0` |
+| Hooks React | `eslint-plugin-react-hooks` | `5.2.0` |
+| Refresh React | `eslint-plugin-react-refresh` | `0.4.22` |
+| Testing | Vitest | `4.0.3` |
+| DOM Testing | Testing Library React | `16.3.0` |
+| Matchers | `@testing-library/jest-dom` | `6.9.1` |
+| Entorno tests | jsdom | `27.0.1` |
+| Cobertura | `@vitest/coverage-v8` | `4.0.3` |
+
+### Notas técnicas actuales
+
+- El proyecto usa `BrowserRouter` y una SPA con sidebar persistente.
+- El frontend trabaja con `localStorage` para estado de sesión y contexto de rol.
+- La integración con microservicios usa `fetch` y headers centralizados en [apiConfig.ts](file:///c:/Users/jeanf/OneDrive/Documentos/GitHub/LeaseFlow-Web-/src/config/apiConfig.ts).
+- Las respuestas JSON de servicios se normalizan para corregir problemas de codificación UTF-8 cuando el backend devuelve texto mal decodificado.
 
 ## Arquitectura
 
 ### Vista general
 
-El frontend consume varios microservicios HTTP. Las URLs se centralizan en [apiConfig.ts](src/config/apiConfig.ts).
+El frontend consume varios microservicios HTTP. Las URLs y headers se centralizan en [apiConfig.ts](file:///c:/Users/jeanf/OneDrive/Documentos/GitHub/LeaseFlow-Web-/src/config/apiConfig.ts).
 
 ```mermaid
 flowchart LR
@@ -55,20 +94,27 @@ flowchart LR
   AS --> DS
 ```
 
-### Microservicios esperados (puertos por defecto)
+### Microservicios actuales
 
-| Servicio | Puerto | Base URL por defecto | Propósito |
+| Servicio | Desarrollo | Producción | Propósito |
 |---|---:|---|---|
-| User Service | 8081 | `http://localhost:8081/api` | Autenticación y usuarios |
-| Property Service | 8082 | `http://localhost:8082/api` | Propiedades, comunas, tipos, fotos |
-| Document Service | 8083 | `http://localhost:8083/api` | Documentos de usuarios (estados / tipos) |
-| Application Service | 8084 | `http://localhost:8084/api` | Solicitudes y registros de arriendo |
-| Contact Service | 8085 | `http://localhost:8085/api` | Mensajes de contacto |
-| Review Service | 8086 | `http://localhost:8086/api` | Reservado en config (no usado en UI actual) |
+| User Service | Proxy `/userservice/api` | Azure Container Apps | Autenticación, usuarios y estados |
+| Property Service | Proxy `/propertyservice/api` | Azure Container Apps | Propiedades, fotos, regiones, comunas y tipos |
+| Document Service | Proxy `/documentservice/api` | Azure Container Apps | Documentos, estados y verificación de aprobados |
+| Application Service | Proxy `/applicationservice/api` | Azure Container Apps | Solicitudes y registros de arriendo |
+| Contact Service | Proxy `/contactservice/api` | Azure Container Apps | Mensajes de contacto |
+| Review Service | Proxy `/reviewservice/api` | Azure Container Apps | Reseñas y tipos de reseña |
+
+Notas:
+
+- En desarrollo se trabaja con proxies locales configurados por prefijo.
+- En producción las URLs apuntan a Azure Container Apps.
+- Todas las requests incluyen `X-App-Client` y las protegidas agregan `X-Usuario-Id` y `X-Rol-Id`.
+- Para evitar preflight innecesario, los `GET` y `DELETE` no envían `Content-Type`.
 
 ### Routing (SPA)
 
-Las rutas están definidas en [App.tsx](src/App.tsx):
+Las rutas están definidas en [App.tsx](file:///c:/Users/jeanf/OneDrive/Documentos/GitHub/LeaseFlow-Web-/src/App.tsx):
 
 | Ruta | Pantalla | Notas |
 |---|---|---|
@@ -79,9 +125,15 @@ Las rutas están definidas en [App.tsx](src/App.tsx):
 | `/login` | Login | Login contra User Service |
 | `/registro` | Registro | Registro + “carga” de documentos |
 | `/perfil` | Perfil | Datos del usuario y documentos |
-| `/gestion-propiedades` | Gestión Propiedades | Propietario/Admin |
+| `/gestion-propiedades` / `/mis-propiedades` / `/gestor-propiedades` | Gestión Propiedades | Según rol |
 | `/gestion-documentos` | Gestión Documentos | Admin |
-| `/valoraciones` | Valoraciones | UI local |
+| `/admin` | Dashboard | Admin |
+| `/gestion-usuarios` | Gestión de Usuarios | Admin |
+| `/gestion-contacto` | Gestión de Contacto | Admin |
+| `/mis-solicitudes` | Mis Solicitudes | Arrendatario |
+| `/solicitudes-recibidas` | Solicitudes Recibidas | Propietario/Admin |
+| `/mis-arriendos` | Mis Arriendos | Arrendatario |
+| `/valoraciones` | Valoraciones | Integrada con `reviewService` |
 
 ### “Sesión” y permisos (frontend)
 
@@ -94,7 +146,7 @@ El estado de sesión se modela con `localStorage` (no hay JWT en este frontend):
 
 La barra de navegación y algunas pantallas realizan validación por rol/estado leyendo estas claves (ej.: [useUsuarios.ts](src/hooks/useUsuarios.ts), [GestionDocumentos.tsx](src/paginas/GestionDocumentos.tsx), [GestionPropiedades.tsx](src/paginas/GestionPropiedades.tsx)).
 
-Nota: esto es control UI, no seguridad real. La autorización debe estar reforzada en backend.
+Nota: esto es control UI, no seguridad real. La autorización efectiva debe estar reforzada en backend.
 
 ## Modelo de datos (DTOs)
 
@@ -118,8 +170,10 @@ Entidades relevantes:
 
 ### Requisitos
 
-- Node.js 20+ recomendado (Vite 7)
-- Backends (microservicios) ejecutándose en los puertos configurados
+- Node.js 20+ recomendado
+- npm 10+ recomendado
+- Microservicios disponibles por proxy local o despliegue remoto
+- Variable opcional `VITE_APP_CLIENT_KEY` para el header `X-App-Client`
 
 ### Instalación y ejecución
 
@@ -132,7 +186,13 @@ La aplicación quedará disponible en la URL que muestre Vite (por defecto suele
 
 ### Configuración de microservicios
 
-Editar [apiConfig.ts](src/config/apiConfig.ts) para cambiar URLs/puertos si es necesario.
+Editar [apiConfig.ts](file:///c:/Users/jeanf/OneDrive/Documentos/GitHub/LeaseFlow-Web-/src/config/apiConfig.ts) para cambiar proxies o URLs productivas si es necesario.
+
+Ejemplo de variable local:
+
+```bash
+VITE_APP_CLIENT_KEY=rentify-leaseflow-dev-key-2026
+```
 
 ## Scripts
 
@@ -145,6 +205,7 @@ npm run preview   # preview del build
 npm run lint      # eslint .
 npm run test      # vitest run
 npm run test:ui   # vitest (modo watch/UI)
+npm run smoke:api # smoke test de endpoints proxificados
 ```
 
 ## Estructura del proyecto
@@ -153,12 +214,14 @@ npm run test:ui   # vitest (modo watch/UI)
 src/
   api/            Clientes HTTP por microservicio
   config/         Config global (URLs, constantes de dominio)
+  core/           Manejo centralizado de errores
   hooks/          Hooks de dominio (estado + llamadas a servicios)
   paginas/        Pantallas (rutas)
   test/           Tests (Vitest + Testing Library)
   types/          DTOs y tipos compartidos
+  utils/          Utilidades transversales (incluye normalización UTF-8)
   main.tsx        Entry point (BrowserRouter + Bootstrap)
-  App.tsx         Router + layout (navbar/footer)
+  App.tsx         Router + layout principal con sidebar
 ```
 
 Notas:
@@ -225,14 +288,27 @@ sequenceDiagram
   end
 ```
 
+### Solicitudes recibidas del propietario
+
+La vista de [SolicitudesRecibidas.tsx](file:///c:/Users/jeanf/OneDrive/Documentos/GitHub/LeaseFlow-Web-/src/paginas/SolicitudesRecibidas.tsx) usa `Application Service` como fuente principal de solicitudes y luego cruza datos con `Property Service`, `User Service` y `Document Service` para enriquecer la interfaz del arrendador.
+
+Actualmente muestra:
+
+- Datos completos del postulante.
+- Datos completos de la propiedad.
+- Documentos aceptados del postulante.
+- Acciones para aceptar o rechazar la solicitud.
+
 ## Pruebas y calidad
 
 - Tests: se ubican en [src/test](src/test) y se ejecutan con `npm run test`.
 - Setup de testing: [setupTests.ts](src/setupTests.ts) (jsdom + matchers).
 - Lint: `npm run lint` (config: [eslint.config.js](eslint.config.js)).
+- El proyecto compila correctamente con `npm run build`.
 
 ## Troubleshooting
 
-- Error “Failed to fetch”: usualmente significa microservicio apagado o CORS no configurado. Verifica que los puertos `8081..8085` estén activos y que el backend permita requests desde `http://localhost:5173`.
+- Error “Failed to fetch”: usualmente significa microservicio apagado, proxy mal configurado o CORS no configurado. Verifica que los servicios estén disponibles y que el backend permita requests desde el frontend local.
 - “Acceso denegado” en pantallas admin: la UI valida `userRole === ADMIN`. Revisa `localStorage.userRole` y el `rolId` que devuelve el backend.
 - “Debes tener al menos un documento aprobado para postular”: el Document Service debe retornar `true` en el endpoint de verificación de aprobados para el usuario.
+- Si aparecen textos como `ContraseÃ±a` o `Â¿`, el frontend ya intenta repararlos al normalizar respuestas JSON, pero idealmente el backend debe responder siempre en UTF-8 correcto.
